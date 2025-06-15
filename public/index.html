@@ -1,0 +1,1048 @@
+                            <!-- <div>
+                                <small style="color: #888;"><span class="currency-name">RLUSD</span> Balance</small>
+                                <div class="balance">${parseFloat(data.balance || 0).toFixed(2)} <span class="currency-name">RLUSD</span></div>
+                            </div>
+                            <div>
+                                <small style="color: #888;">Trustline Status</small>
+                                <div style="margin-top: 10px;">
+                                    <span class="status-indicator ${data.hasRLUSDTrustline ? 'status-success' : 'status-error'}"></span>
+                                    ${data.hasRLUSDTrustline ? 'Active' : 'Not Set'}
+                                </div>
+                            </div>
+                            ${data.hasRLUSDTrustline ? `
+                                <div>
+                                    <small style="color: #888;">Trustline Limit</small>
+                                    <div style="margin-top: 10px; color: #00ccff;">
+                                        ${parseFloat(data.trustlineLimit || 0).toLocaleString()} <span class="currency-name">RLUSD</span>
+                                    </div>
+                                </div>
+                            ` : ''}<!DOCTYPE html> -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XRPL Token Transaction Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+            padding: 30px 0;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #00ff88 0%, #00ccff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .wallet-info {
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border: 1px solid #333;
+        }
+
+        .wallet-address {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #00ff88;
+            word-break: break-all;
+        }
+
+        .balance {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00ccff;
+            margin-top: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .tab:hover {
+            color: #fff;
+        }
+
+        .tab.active {
+            color: #00ff88;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #00ff88;
+        }
+
+        .content {
+            display: none;
+        }
+
+        .content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #ccc;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #00ff88;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #00ff88 0%, #00ccff 100%);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid;
+        }
+
+        .alert-success {
+            background: rgba(0, 255, 136, 0.1);
+            border-color: #00ff88;
+            color: #00ff88;
+        }
+
+        .alert-error {
+            background: rgba(255, 0, 0, 0.1);
+            border-color: #ff4444;
+            color: #ff4444;
+        }
+
+        .alert-warning {
+            background: rgba(255, 193, 7, 0.1);
+            border-color: #ffc107;
+            color: #ffc107;
+        }
+
+        .transaction-log {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: transform 0.2s ease;
+        }
+
+        .transaction-log:hover {
+            transform: translateX(5px);
+            border-color: #00ff88;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .log-type {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .log-type.send_payment {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+        }
+
+        .log-type.balance_check {
+            background: rgba(0, 204, 255, 0.2);
+            color: #00ccff;
+        }
+
+        .log-type.create_trustline {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+        }
+
+        .log-details {
+            font-size: 0.9rem;
+            color: #888;
+        }
+
+        .hash {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #00ccff;
+            text-decoration: none;
+        }
+
+        .hash:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #333;
+            border-radius: 50%;
+            border-top-color: #00ff88;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .status-success {
+            background: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        .status-error {
+            background: #ff4444;
+            box-shadow: 0 0 10px #ff4444;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00ff88;
+        }
+
+        .stat-label {
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-controls input,
+        .filter-controls select {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            .tabs {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .filter-controls {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>XRPL Token Transaction Manager</h1>
+            <p>Mainnet Token Operations Dashboard</p>
+        </header>
+
+        <div class="wallet-info" id="walletInfo">
+            <div id="walletStatus">
+                <div class="loading"></div> Loading wallet information...
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('config')">⚙️ Configuration</button>
+            <button class="tab" onclick="switchTab('send')">Send</button>
+            <button class="tab" onclick="switchTab('balance')">Check Balance</button>
+            <button class="tab" onclick="switchTab('trustline')">Trustline</button>
+            <button class="tab" onclick="switchTab('logs')">Transaction Logs</button>
+
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <!-- Send RLUSD Tab -->
+        <div id="send" class="content active">
+            <form id="sendForm">
+                <div class="form-group">
+                    <label for="destination">Recipient Address</label>
+                    <input type="text" id="destination" name="destination" placeholder="r..." required>
+                    <small id="addressValidation" style="color: #888; display: block; margin-top: 5px;"></small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="amount">Amount (<span class="currency-name">RLUSD</span>)</label>
+                    <input type="number" id="amount" name="amount" placeholder="0.00" step="0.01" min="0.01" max="1000" required>
+                    <small style="color: #888;">Maximum: 1000 <span class="currency-name">RLUSD</span> per transaction</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="destinationTag">Destination Tag (Optional)</label>
+                    <input type="number" id="destinationTag" name="destinationTag" placeholder="Optional">
+                </div>
+                
+                <button type="submit" class="btn" id="sendButton">Send RLUSD</button>
+            </form>
+        </div>
+
+        <!-- Check Balance Tab -->
+        <div id="balance" class="content">
+            <form id="balanceForm">
+                <div class="form-group">
+                    <label for="checkAddress">Address to Check</label>
+                    <input type="text" id="checkAddress" name="address" placeholder="r..." required>
+                </div>
+                
+                <button type="submit" class="btn">Check Balance</button>
+            </form>
+            
+            <div id="balanceResult" style="margin-top: 20px;"></div>
+        </div>
+
+        <!-- Trustline Tab -->
+        <div id="trustline" class="content">
+            <form id="trustlineForm">
+                <div class="form-group">
+                    <label for="trustlineLimit">Trustline Limit</label>
+                    <input type="number" id="trustlineLimit" name="limit" placeholder="1000000" value="1000000" min="1">
+                    <small style="color: #888;">Maximum amount of RLUSD to trust</small>
+                </div>
+                
+                <button type="submit" class="btn">Create Trustline</button>
+            </form>
+        </div>
+
+        <!-- Transaction Logs Tab -->
+        <div id="logs" class="content">
+            <div class="stats" id="logStats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalTransactions">0</div>
+                    <div class="stat-label">Total Transactions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="successRate">0%</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalSent">0</div>
+                    <div class="stat-label">Total Sent</div>
+                </div>
+            </div>
+
+            <div class="filter-controls">
+                <select id="logTypeFilter">
+                    <option value="">All Types</option>
+                    <option value="send_payment">Payments</option>
+                    <option value="balance_check">Balance Checks</option>
+                    <option value="create_trustline">Trustlines</option>
+                </select>
+                
+                <input type="date" id="logDateFilter">
+                
+                <button class="btn btn-secondary" onclick="loadLogs()">Refresh</button>
+                <button class="btn btn-secondary" onclick="exportLogs()">Export CSV</button>
+            </div>
+            
+            <div id="logsContainer">
+                <div class="loading"></div> Loading logs...
+            </div>
+        </div>
+
+        <!-- Configuration Tab -->
+        <div id="config" class="content">
+            <div class="alert alert-warning">
+                <strong>⚠️ Important:</strong> Changes to configuration will affect all transactions. Make sure you understand what you're doing.
+            </div>
+            
+            <form id="configForm">
+                <h3 style="margin-bottom: 20px;">Token Configuration</h3>
+                
+                <div class="form-group">
+                    <label for="issuerAddress">Issuer Address</label>
+                    <input type="text" id="issuerAddress" name="issuer" placeholder="r..." required>
+                    <small style="color: #888;">The address that issues the token (default: RLUSD issuer)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="currencyCode">Currency Code</label>
+                    <input type="text" id="currencyCode" name="currencyCode" placeholder="RLUSD" maxlength="20" required>
+                    <small style="color: #888;">3-20 character currency code</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="currencyHex">Currency Hex (Optional)</label>
+                    <input type="text" id="currencyHex" name="currencyHex" placeholder="40 hex characters" maxlength="40">
+                    <small style="color: #888;">40-character hex representation for non-standard currency codes</small>
+                </div>
+                
+                <hr style="margin: 30px 0; border-color: #333;">
+                
+                <h3 style="margin-bottom: 20px;">Wallet Configuration</h3>
+                
+                <div class="form-group">
+                    <label for="walletSeed">Wallet Seed</label>
+                    <input type="password" id="walletSeed" name="walletSeed" placeholder="sYourSeedHere...">
+                    <small style="color: #888;">Your secret seed (starts with 's'). This is stored in session only.</small>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="testWalletConnection()">Test Connection</button>
+                    <button type="submit" class="btn">Save Configuration</button>
+                </div>
+            </form>
+            
+            <div id="configStatus" style="margin-top: 30px;"></div>
+            
+            <div style="margin-top: 40px; padding: 20px; background: #1a1a1a; border-radius: 10px;">
+                <h4>Current Configuration</h4>
+                <div id="currentConfig" style="margin-top: 15px; font-family: 'Courier New', monospace; font-size: 0.9rem;">
+                    Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let currentTab = 'config';
+        let walletAddress = '';
+        let currentConfig = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConfiguration();
+            loadWalletInfo();
+            setupFormHandlers();
+            setupAddressValidation();
+            
+            // Auto-refresh wallet info every 30 seconds
+            setInterval(loadWalletInfo, 30000);
+        });
+
+        // Load configuration
+        async function loadConfiguration() {
+            try {
+                const response = await fetch(`${API_BASE}/config`);
+                const config = await response.json();
+                currentConfig = config;
+                
+                // Update form fields
+                document.getElementById('issuerAddress').value = config.issuer || '';
+                document.getElementById('currencyCode').value = config.currencyCode || '';
+                document.getElementById('currencyHex').value = config.currencyHex || '';
+                
+                // Update current config display
+                document.getElementById('currentConfig').innerHTML = `
+                    <div>Network: <span style="color: #00ff88;">${config.network}</span></div>
+                    <div>Issuer: <span style="color: #00ccff;">${config.issuer}</span></div>
+                    <div>Currency: <span style="color: #00ccff;">${config.currencyCode}</span></div>
+                    <div>Wallet: <span style="color: ${config.hasWallet ? '#00ff88' : '#ff4444'};">${config.hasWallet ? config.walletAddress : 'Not configured'}</span></div>
+                `;
+                
+                // Update UI based on currency
+                updateCurrencyDisplay(config.currencyCode);
+                
+            } catch (error) {
+                console.error('Failed to load configuration:', error);
+            }
+        }
+
+        // Update currency display throughout UI
+        function updateCurrencyDisplay(currency) {
+            // Update all currency references in the UI
+            document.querySelectorAll('.currency-name').forEach(el => {
+                el.textContent = currency;
+            });
+            
+            // Update labels and placeholders
+            const amountInput = document.getElementById('amount');
+            if (amountInput) {
+                amountInput.placeholder = `0.00 ${currency}`;
+            }
+            
+            // Update stat label
+            const sentLabel = document.querySelector('#totalSent').nextElementSibling;
+            if (sentLabel) {
+                sentLabel.textContent = `${currency} Sent`;
+            }
+        }
+
+        // Tab switching
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update content
+            document.querySelectorAll('.content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabName).classList.add('active');
+            
+            // Load logs if switching to logs tab
+            if (tabName === 'logs') {
+                loadLogs();
+            }
+        }
+
+        // Show alert
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            
+            alertContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        // Load wallet information
+        async function loadWalletInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/wallet`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    walletAddress = data.address;
+                    const walletStatus = document.getElementById('walletStatus');
+                    walletStatus.innerHTML = `
+                        <div style="margin-bottom: 10px;">
+                            <strong>Wallet Address:</strong>
+                            <div class="wallet-address">${data.address}</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                            <div>
+                                <small style="color: #888;"><span class="currency-name">RLUSD</span> Balance</small>
+                                <div class="balance">${parseFloat(data.balance || 0).toFixed(2)} <span class="currency-name">RLUSD</span></div>
+                            </div>
+                            <div>
+                                <small style="color: #888;">Trustline Status</small>
+                                <div style="margin-top: 10px;">
+                                    <span class="status-indicator ${data.hasRLUSDTrustline ? 'status-success' : 'status-error'}"></span>
+                                    ${data.hasRLUSDTrustline ? 'Active' : 'Not Set'}
+                                </div>
+                            </div>
+                            ${data.hasRLUSDTrustline ? `
+                                <div>
+                                    <small style="color: #888;">Trustline Limit</small>
+                                    <div style="margin-top: 10px; color: #00ccff;">
+                                        ${parseFloat(data.trustlineLimit || 0).toLocaleString()} <span class="currency-name">RLUSD</span>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('walletStatus').innerHTML = 
+                        `<div class="alert alert-error">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('walletStatus').innerHTML = 
+                    `<div class="alert alert-error">Failed to load wallet info: ${error.message}</div>`;
+            }
+        }
+
+        // Setup form handlers
+        function setupFormHandlers() {
+            // Send form
+            document.getElementById('sendForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const button = document.getElementById('sendButton');
+                const originalText = button.textContent;
+                button.disabled = true;
+                button.innerHTML = '<span class="loading"></span> Sending...';
+                
+                const formData = {
+                    destination: document.getElementById('destination').value,
+                    amount: document.getElementById('amount').value,
+                    destinationTag: document.getElementById('destinationTag').value || null
+                };
+                
+                try {
+                    const response = await fetch(`${API_BASE}/send`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        showAlert(`✅ Successfully sent ${formData.amount} ${currentConfig.currencyCode || 'RLUSD'}! Transaction: ${result.hash}`, 'success');
+                        
+                        // Open explorer in new tab
+                        if (result.explorerUrl) {
+                            window.open(result.explorerUrl, '_blank');
+                        }
+                        
+                        // Reset form
+                        e.target.reset();
+                        
+                        // Reload wallet info
+                        loadWalletInfo();
+                    } else {
+                        showAlert(`❌ Error: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    showAlert(`❌ Network error: ${error.message}`, 'error');
+                } finally {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            });
+            
+            // Balance form
+            document.getElementById('balanceForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const address = document.getElementById('checkAddress').value;
+                const resultDiv = document.getElementById('balanceResult');
+                
+                resultDiv.innerHTML = '<div class="loading"></div> Checking...';
+                
+                try {
+                    const response = await fetch(`${API_BASE}/balance`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ address })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        const currency = result.currency || currentConfig.currencyCode || 'RLUSD';
+                        resultDiv.innerHTML = `
+                            <div class="wallet-info" style="margin-top: 20px;">
+                                <h3>Account Information</h3>
+                                <div style="margin-top: 15px;">
+                                    <strong>Address:</strong>
+                                    <div class="wallet-address">${address}</div>
+                                </div>
+                                <div style="margin-top: 15px;">
+                                    <strong>${currency} Balance:</strong>
+                                    <div class="balance">${parseFloat(result.balance || 0).toFixed(2)} ${currency}</div>
+                                </div>
+                                <div style="margin-top: 15px;">
+                                    <strong>Account Status:</strong>
+                                    <div>
+                                        <span class="status-indicator ${result.exists ? 'status-success' : 'status-error'}"></span>
+                                        ${result.exists ? 'Active' : 'Not Found'}
+                                    </div>
+                                </div>
+                                <div style="margin-top: 15px;">
+                                    <strong>${currency} Trustline:</strong>
+                                    <div>
+                                        <span class="status-indicator ${result.hasTrustline ? 'status-success' : 'status-error'}"></span>
+                                        ${result.hasTrustline ? `Active (Limit: ${parseFloat(result.trustlineLimit).toLocaleString()})` : 'Not Set'}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        resultDiv.innerHTML = `<div class="alert alert-error">Error: ${result.error}</div>`;
+                    }
+                } catch (error) {
+                    resultDiv.innerHTML = `<div class="alert alert-error">Network error: ${error.message}</div>`;
+                }
+            });
+            
+            // Trustline form
+            document.getElementById('trustlineForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const button = e.target.querySelector('button[type="submit"]');
+                const originalText = button.textContent;
+                button.disabled = true;
+                button.innerHTML = '<span class="loading"></span> Creating...';
+                
+                const limit = document.getElementById('trustlineLimit').value;
+                
+                try {
+                    const response = await fetch(`${API_BASE}/trustline`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ limit })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        if (result.hash) {
+                            showAlert(`✅ Trustline created successfully! Transaction: ${result.hash}`, 'success');
+                            window.open(`https://livenet.xrpl.org/transactions/${result.hash}`, '_blank');
+                        } else {
+                            showAlert(result.message, 'warning');
+                        }
+                        loadWalletInfo();
+                    } else {
+                        showAlert(`❌ Error: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    showAlert(`❌ Network error: ${error.message}`, 'error');
+                } finally {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            });
+            
+            // Configuration form
+            document.getElementById('configForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const button = e.target.querySelector('button[type="submit"]');
+                const originalText = button.textContent;
+                button.disabled = true;
+                button.innerHTML = '<span class="loading"></span> Saving...';
+                
+                const formData = {
+                    issuer: document.getElementById('issuerAddress').value,
+                    currencyCode: document.getElementById('currencyCode').value,
+                    currencyHex: document.getElementById('currencyHex').value,
+                    walletSeed: document.getElementById('walletSeed').value
+                };
+                
+                try {
+                    const response = await fetch(`${API_BASE}/config`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        showAlert('✅ Configuration saved successfully!', 'success');
+                        currentConfig = result.config;
+                        updateCurrencyDisplay(result.config.currencyCode);
+                        loadConfiguration();
+                        loadWalletInfo();
+                        
+                        // Clear wallet seed field for security
+                        document.getElementById('walletSeed').value = '';
+                    } else {
+                        showAlert(`❌ Error: ${result.error}`, 'error');
+                        if (result.address) {
+                            showAlert(`Send XRP to: ${result.address}`, 'warning');
+                        }
+                    }
+                } catch (error) {
+                    showAlert(`❌ Network error: ${error.message}`, 'error');
+                } finally {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            });
+        }
+        
+        // Address validation
+        function setupAddressValidation() {
+            const destinationInput = document.getElementById('destination');
+            const validationMsg = document.getElementById('addressValidation');
+            
+            destinationInput.addEventListener('input', async (e) => {
+                const address = e.target.value;
+                
+                if (!address) {
+                    validationMsg.textContent = '';
+                    return;
+                }
+                
+                if (address.length < 25) {
+                    validationMsg.style.color = '#888';
+                    validationMsg.textContent = 'Keep typing...';
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`${API_BASE}/validate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ address })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.isValid) {
+                        validationMsg.style.color = '#00ff88';
+                        validationMsg.textContent = '✓ Valid address';
+                    } else {
+                        validationMsg.style.color = '#ff4444';
+                        validationMsg.textContent = '✗ Invalid address format';
+                    }
+                } catch (error) {
+                    console.error('Validation error:', error);
+                }
+            });
+        }
+        
+        // Load transaction logs
+        async function loadLogs() {
+            const container = document.getElementById('logsContainer');
+            container.innerHTML = '<div class="loading"></div> Loading logs...';
+            
+            const typeFilter = document.getElementById('logTypeFilter').value;
+            const dateFilter = document.getElementById('logDateFilter').value;
+            
+            try {
+                const params = new URLSearchParams();
+                if (typeFilter) params.append('type', typeFilter);
+                if (dateFilter) params.append('date', dateFilter);
+                
+                const response = await fetch(`${API_BASE}/logs?${params}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Update stats
+                    updateLogStats(data.logs);
+                    
+                    // Display logs
+                    if (data.logs.length === 0) {
+                        container.innerHTML = '<div class="alert alert-warning">No transactions found</div>';
+                    } else {
+                        container.innerHTML = data.logs.map(log => `
+                            <div class="transaction-log">
+                                <div class="log-header">
+                                    <span class="log-type ${log.type}">${formatLogType(log.type)}</span>
+                                    <span>${new Date(log.timestamp).toLocaleString()}</span>
+                                </div>
+                                <div class="log-details">
+                                    ${formatLogDetails(log)}
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    container.innerHTML = `<div class="alert alert-error">Error loading logs: ${data.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-error">Network error: ${error.message}</div>`;
+            }
+        }
+        
+        // Update log statistics
+        function updateLogStats(logs) {
+            const totalTransactions = logs.length;
+            const successfulTransactions = logs.filter(log => log.success).length;
+            const successRate = totalTransactions > 0 ? (successfulTransactions / totalTransactions * 100).toFixed(1) : 0;
+            const totalSent = logs
+                .filter(log => log.type === 'send_payment' && log.success)
+                .reduce((sum, log) => sum + parseFloat(log.amount || 0), 0);
+            
+            document.getElementById('totalTransactions').textContent = totalTransactions;
+            document.getElementById('successRate').textContent = `${successRate}%`;
+            document.getElementById('totalSent').textContent = totalSent.toFixed(2);
+        }
+        
+        // Format log type for display
+        function formatLogType(type) {
+            const types = {
+                'send_payment': 'Payment',
+                'balance_check': 'Balance Check',
+                'create_trustline': 'Trustline'
+            };
+            return types[type] || type;
+        }
+        
+        // Test wallet connection
+        async function testWalletConnection() {
+            const walletSeed = document.getElementById('walletSeed').value;
+            const statusDiv = document.getElementById('configStatus');
+            
+            if (!walletSeed) {
+                showAlert('Please enter a wallet seed', 'error');
+                return;
+            }
+            
+            statusDiv.innerHTML = '<div class="loading"></div> Testing connection...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/config/test-connection`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ walletSeed })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <h4>✅ Connection Successful!</h4>
+                            <div style="margin-top: 10px;">
+                                <strong>Address:</strong> ${result.address}<br>
+                                <strong>Status:</strong> ${result.exists ? 'Active' : 'Not Activated'}<br>
+                                <strong>XRP Balance:</strong> ${result.balance} XRP<br>
+                                <strong>${currentConfig.currencyCode} Trustline:</strong> ${result.hasRLUSDTrustline ? 'Active' : 'Not Set'}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-error">❌ ${result.error}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="alert alert-error">❌ Network error: ${error.message}</div>`;
+            }
+        }
+        
+        // Format log details
+        function formatLogDetails(log) {
+            let details = [];
+            
+            if (!log.success) {
+                details.push(`<div style="color: #ff4444;">Error: ${log.error}</div>`);
+            }
+            
+            if (log.type === 'send_payment') {
+                details.push(`From: <span class="wallet-address">${log.from}</span>`);
+                details.push(`To: <span class="wallet-address">${log.to}</span>`);
+                details.push(`Amount: <strong>${log.amount} ${log.currency || currentConfig.currencyCode || 'RLUSD'}</strong>`);
+                if (log.hash) {
+                    details.push(`Transaction: <a href="https://livenet.xrpl.org/transactions/${log.hash}" target="_blank" class="hash">${log.hash}</a>`);
+                }
+            } else if (log.type === 'balance_check') {
+                details.push(`Address: <span class="wallet-address">${log.address}</span>`);
+                if (log.balance) {
+                    details.push(`Balance: <strong>${log.balance} ${log.currency || currentConfig.currencyCode || 'RLUSD'}</strong>`);
+                }
+            } else if (log.type === 'create_trustline') {
+                details.push(`Currency: <strong>${log.currency || currentConfig.currencyCode || 'RLUSD'}</strong>`);
+                details.push(`Limit: <strong>${parseFloat(log.limit).toLocaleString()}</strong>`);
+                if (log.hash) {
+                    details.push(`Transaction: <a href="https://livenet.xrpl.org/transactions/${log.hash}" target="_blank" class="hash">${log.hash}</a>`);
+                }
+            } else if (log.type === 'config_update') {
+                details.push(`Configuration updated`);
+                if (log.changes) {
+                    if (log.changes.issuer) details.push(`Issuer: ${log.changes.issuer}`);
+                    if (log.changes.currencyCode) details.push(`Currency: ${log.changes.currencyCode}`);
+                    if (log.changes.hasWallet) details.push(`Wallet: Configured`);
+                }
+            }
+            
+            return details.join('<br>');
+        }
+        
+        // Export logs as CSV
+        function exportLogs() {
+            window.open(`${API_BASE}/logs/export`, '_blank');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  rlusd-manager:
+    build: .
+    container_name: rlusd-manager
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./wallets:/app/wallets
+    restart: unless-stopped
+    networks:
+      - rlusd-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add Redis for session storage
+  redis:
+    image: redis:7-alpine
+    container_name: rlusd-redis
+    restart: unless-stopped
+    networks:
+      - rlusd-network
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
+  # Optional: Add PostgreSQL for persistent storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: rlusd-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=rlusd_db
+      - POSTGRES_USER=rlusd_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+    networks:
+      - rlusd-network
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rlusd_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Add nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: rlusd-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - rlusd-manager
+    networks:
+      - rlusd-network
+
+networks:
+  rlusd-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:

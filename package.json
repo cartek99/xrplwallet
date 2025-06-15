@@ -1,0 +1,27 @@
+{
+  "name": "rlusd-web-interface",
+  "version": "1.0.0",
+  "description": "Web interface for RLUSD transactions on XRP Ledger",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "xrpl": "^2.14.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

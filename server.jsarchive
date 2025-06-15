@@ -1,0 +1,408 @@
+// server.js - Express server for RLUSD transactions
+
+// Load environment variables
+// This MUST be the first line of server.js
+require('dotenv').config();
+
+// Add this to verify it's working
+console.log('Environment check:', {
+    hasSeed: !!process.env.XRPL_SEED,
+    nodeEnv: process.env.NODE_ENV,
+    port: process.env.PORT
+});
+
+
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs').promises;
+const xrpl = require('xrpl');
+const { 
+    createSecureClient,
+    checkAccountStatus,
+    createRLUSDTrustline,
+    sendRLUSD,
+    getRLUSDBalance,
+    isValidAddress,
+    isValidAmount
+} = require('./rlusd-handler');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+// Create logs directory if it doesn't exist
+const LOGS_DIR = path.join(__dirname, 'logs');
+fs.mkdir(LOGS_DIR, { recursive: true }).catch(console.error);
+
+// Transaction logs storage
+let transactionLogs = [];
+
+/**
+ * Log transaction to file and memory
+ */
+async function logTransaction(type, details, success = true) {
+    const logEntry = {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        type,
+        success,
+        ...details
+    };
+    
+    // Add to memory
+    transactionLogs.unshift(logEntry);
+    if (transactionLogs.length > 100) {
+        transactionLogs = transactionLogs.slice(0, 100); // Keep last 100
+    }
+    
+    // Save to file
+    const filename = `${logEntry.timestamp.split('T')[0]}-transactions.json`;
+    const filepath = path.join(LOGS_DIR, filename);
+    
+    try {
+        let dailyLogs = [];
+        try {
+            const existing = await fs.readFile(filepath, 'utf8');
+            dailyLogs = JSON.parse(existing);
+        } catch (e) {
+            // File doesn't exist yet
+        }
+        
+        dailyLogs.push(logEntry);
+        await fs.writeFile(filepath, JSON.stringify(dailyLogs, null, 2));
+    } catch (error) {
+        console.error('Failed to write log file:', error);
+    }
+    
+    return logEntry;
+}
+
+/**
+ * Load wallet from environment or config
+ */
+function getWallet() {
+    const seed = process.env.XRPL_SEED;
+    if (!seed) {
+        throw new Error('XRPL_SEED environment variable not set');
+    }
+    return xrpl.Wallet.fromSeed(seed);
+}
+
+// API Routes
+
+/**
+ * GET /api/health
+ * Health check endpoint
+ */
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        hasWallet: !!process.env.XRPL_SEED 
+    });
+});
+
+/**
+ * GET /api/wallet
+ * Get wallet information (address only, never expose seed)
+ */
+app.get('/api/wallet', async (req, res) => {
+    try {
+        const wallet = getWallet();
+        const client = await createSecureClient();
+        
+        try {
+            const status = await checkAccountStatus(client, wallet.address);
+            res.json({
+                address: wallet.address,
+                ...status
+            });
+        } finally {
+            await client.disconnect();
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/balance
+ * Check RLUSD balance for any address
+ */
+app.post('/api/balance', async (req, res) => {
+    const { address } = req.body;
+    
+    if (!isValidAddress(address)) {
+        return res.status(400).json({ error: 'Invalid address' });
+    }
+    
+    const client = await createSecureClient();
+    try {
+        const balance = await getRLUSDBalance(client, address);
+        const status = await checkAccountStatus(client, address);
+        
+        await logTransaction('balance_check', { address, balance });
+        
+        res.json({ address, balance, ...status });
+    } catch (error) {
+        await logTransaction('balance_check', { address, error: error.message }, false);
+        res.status(500).json({ error: error.message });
+    } finally {
+        await client.disconnect();
+    }
+});
+
+/**
+ * POST /api/trustline
+ * Create RLUSD trustline
+ */
+app.post('/api/trustline', async (req, res) => {
+    const { limit = '1000000' } = req.body;
+    
+    const client = await createSecureClient();
+    try {
+        const wallet = getWallet();
+        
+        // Check if trustline already exists
+        const status = await checkAccountStatus(client, wallet.address);
+        if (status.hasRLUSDTrustline) {
+            return res.json({ 
+                message: 'Trustline already exists',
+                trustlineLimit: status.trustlineLimit,
+                balance: status.balance 
+            });
+        }
+        
+        const result = await createRLUSDTrustline(client, wallet, limit);
+        
+        await logTransaction('create_trustline', {
+            address: wallet.address,
+            limit,
+            hash: result.result.hash,
+            ledger: result.result.ledger_index
+        });
+        
+        res.json({
+            success: true,
+            hash: result.result.hash,
+            ledger: result.result.ledger_index,
+            limit
+        });
+    } catch (error) {
+        await logTransaction('create_trustline', { 
+            error: error.message,
+            limit 
+        }, false);
+        res.status(500).json({ error: error.message });
+    } finally {
+        await client.disconnect();
+    }
+});
+
+/**
+ * POST /api/send
+ * Send RLUSD to another address
+ */
+app.post('/api/send', async (req, res) => {
+    const { destination, amount, destinationTag } = req.body;
+    
+    // Validate inputs
+    if (!isValidAddress(destination)) {
+        return res.status(400).json({ error: 'Invalid destination address' });
+    }
+    
+    if (!isValidAmount(amount)) {
+        return res.status(400).json({ error: 'Invalid amount' });
+    }
+    
+    // Safety limit for web interface
+    if (parseFloat(amount) > 1000) {
+        return res.status(400).json({ 
+            error: 'Amount exceeds safety limit of 1000 RLUSD. Use CLI for larger amounts.' 
+        });
+    }
+    
+    const client = await createSecureClient();
+    try {
+        const wallet = getWallet();
+        
+        // Execute transaction
+        const result = await sendRLUSD(client, wallet, destination, amount, destinationTag);
+        
+        const logEntry = await logTransaction('send_payment', {
+            from: wallet.address,
+            to: destination,
+            amount,
+            destinationTag,
+            hash: result.result.hash,
+            ledger: result.result.ledger_index,
+            fee: result.result.Fee,
+            result: result.result.meta.TransactionResult
+        });
+        
+        res.json({
+            success: true,
+            hash: result.result.hash,
+            ledger: result.result.ledger_index,
+            explorerUrl: `https://livenet.xrpl.org/transactions/${result.result.hash}`,
+            log: logEntry
+        });
+    } catch (error) {
+        await logTransaction('send_payment', {
+            from: getWallet().address,
+            to: destination,
+            amount,
+            error: error.message
+        }, false);
+        res.status(500).json({ error: error.message });
+    } finally {
+        await client.disconnect();
+    }
+});
+
+/**
+ * GET /api/logs
+ * Get transaction logs
+ */
+app.get('/api/logs', async (req, res) => {
+    const { limit = 50, type, date } = req.query;
+    
+    try {
+        let logs = transactionLogs;
+        
+        // Filter by type if specified
+        if (type) {
+            logs = logs.filter(log => log.type === type);
+        }
+        
+        // Filter by date if specified
+        if (date) {
+            logs = logs.filter(log => log.timestamp.startsWith(date));
+        }
+        
+        // Apply limit
+        logs = logs.slice(0, parseInt(limit));
+        
+        res.json({ logs, total: logs.length });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/logs/export
+ * Export logs as CSV
+ */
+app.get('/api/logs/export', async (req, res) => {
+    try {
+        const csv = [
+            'Timestamp,Type,Success,From,To,Amount,Hash,Error',
+            ...transactionLogs.map(log => [
+                log.timestamp,
+                log.type,
+                log.success,
+                log.from || '',
+                log.to || '',
+                log.amount || '',
+                log.hash || '',
+                log.error || ''
+            ].join(','))
+        ].join('\n');
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=rlusd-transactions.csv');
+        res.send(csv);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/validate
+ * Validate an address
+ */
+app.post('/api/validate', async (req, res) => {
+    const { address } = req.body;
+    
+    if (!address) {
+        return res.status(400).json({ error: 'Address required' });
+    }
+    
+    const isValid = isValidAddress(address);
+    res.json({ 
+        address, 
+        isValid,
+        message: isValid ? 'Valid XRP Ledger address' : 'Invalid address format' 
+    });
+});
+
+// Load initial logs from files
+async function loadHistoricalLogs() {
+    try {
+        const files = await fs.readdir(LOGS_DIR);
+        const jsonFiles = files.filter(f => f.endsWith('.json'));
+        
+        for (const file of jsonFiles.slice(-7)) { // Last 7 days
+            try {
+                const content = await fs.readFile(path.join(LOGS_DIR, file), 'utf8');
+                const logs = JSON.parse(content);
+                transactionLogs.push(...logs);
+            } catch (e) {
+                console.error(`Failed to load ${file}:`, e.message);
+            }
+        }
+        
+        // Sort by timestamp, newest first
+        transactionLogs.sort((a, b) => 
+            new Date(b.timestamp) - new Date(a.timestamp)
+        );
+        
+        // Keep only last 100
+        transactionLogs = transactionLogs.slice(0, 100);
+        
+        console.log(`Loaded ${transactionLogs.length} historical logs`);
+    } catch (error) {
+        console.error('Failed to load historical logs:', error);
+    }
+}
+
+// Start server
+async function startServer() {
+    // Check for wallet configuration
+    if (!process.env.XRPL_SEED) {
+        console.error('\n⚠️  WARNING: XRPL_SEED environment variable not set!');
+        console.error('Set it using: export XRPL_SEED=sYourSeedHere');
+        console.error('Or create a .env file with XRPL_SEED=sYourSeedHere\n');
+    }
+    
+    // Load historical logs
+    await loadHistoricalLogs();
+    
+    // Start listening
+    app.listen(PORT, () => {
+        console.log(`\n🚀 RLUSD Web Interface running on http://localhost:${PORT}`);
+        console.log('\nAPI Endpoints:');
+        console.log('  GET  /api/health        - Health check');
+        console.log('  GET  /api/wallet        - Get wallet info');
+        console.log('  POST /api/balance       - Check any address balance');
+        console.log('  POST /api/trustline     - Create RLUSD trustline');
+        console.log('  POST /api/send          - Send RLUSD');
+        console.log('  GET  /api/logs          - View transaction logs');
+        console.log('  GET  /api/logs/export   - Export logs as CSV');
+        console.log('  POST /api/validate      - Validate an address\n');
+    });
+}
+
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+    console.log('\nShutting down gracefully...');
+    process.exit(0);
+});
+
+// Start the server
+startServer().catch(console.error);
