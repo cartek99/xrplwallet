@@ -27,8 +27,8 @@ A comprehensive Node.js toolkit for managing RLUSD (Ripple USD) transactions on 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/xrpl-rlusd-manager.git
-cd xrpl-rlusd-manager
+git clone https://github.com/yourusername/xrplwallet.git
+cd xrplwallet
 ```
 
 2. Install dependencies:
@@ -72,7 +72,7 @@ npm run send -- <recipient> <amount>
 ## 📁 Project Structure
 
 ```
-xrpl-rlusd-manager/
+xrplwallet/
 ├── src/
 │   ├── core/
 │   │   ├── rlusd-handler.js      # Core RLUSD transaction logic
@@ -229,3 +229,6 @@ This software is provided "as is" without warranty of any kind. Use at your own 
 ---
 
 Made with ❤️ for the XRPL community
+
+Please see a walkthrough video here: https://app.guidde.com/share/playbooks/a6rCnLZA2LgtqTDCQhFG4n?origin=J9UAqvbY2RhomBzd25aFfbvULYR2 
+
